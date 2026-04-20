@@ -3,9 +3,18 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
+import path from 'path';
+import wasm from 'vite-plugin-wasm';
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
+	plugins: [tailwindcss(), sveltekit(), devtoolsJson(), wasm()],
+  server: {
+    fs: {
+      allow: [
+        path.resolve(__dirname, 'modules') 
+      ]
+    }
+  },
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
