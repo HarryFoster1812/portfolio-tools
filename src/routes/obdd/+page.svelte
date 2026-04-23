@@ -4,7 +4,6 @@
     import Viz from 'viz.js';
     import { Module, render } from 'viz.js/full.render.js';
 
-    // Core State (Maintained)
     let input = "";
     let isValid = false;
     let engine: Engine | null = null;
@@ -14,8 +13,50 @@
     let stategraphs: String[] = [];
     let svg: String | null = null; 
 
-    // Future-proofing state
-    let currentLine = 2; // For your upcoming arrow feature
+    let currentScope: 'Obdd' | 'Integrate' = 'Obdd';
+    let currentLine: number | null = 0; 
+    let currentBlock: string = "preprocess";
+
+    const stepUIMap = {
+      Obdd: {
+        Simplify: { block: "preprocess", line: 1 },
+        CheckBottom: { block: "base-case", line: 2 },
+        CheckTop: { block: "base-case", line: 3 },
+        ChooseVariable: { block: "decompose", line: 4 },
+        RecurseLow: { block: "recurse", line: 5 },
+        RecurseHigh: { block: "recurse", line: 6 },
+        CallIntegrate: { block: "merge", line: 7 },
+        Return: { block: "exit" }
+      },
+
+      Integrate: {
+        CheckEqual: { block: "fast-path", line: 1 },
+        LookupNode: { block: "memo", line: 2 },
+        CreateNode: { block: "allocate", line: 3 },
+        Return: { block: "exit" }
+      }
+    };
+    
+    const functions = {
+        Obdd: [
+            "obdd(F):",
+            "  F := simplify(F)",
+            "  if F = ⊥ return 0",
+            "  if F = ⊤ return 1",
+            "  p := max_variable(F)",
+            "  n1 := obdd(F[p=0])",
+            "  n2 := obdd(F[p=1])",
+            "  return integrate(n1, p, n2, D)"
+        ],
+        Integrate: [
+            "integrate(n1, p, n2, D):",
+            "  if n1 = n2 return n1",
+            "  if D contains node(p, n1, n2):",
+            "    return existing n",
+            "  n := D.create_node(p, n1, n2)",
+            "  return n"
+        ]
+    };
 
     onMount(async () => {
         await initWasm();
@@ -28,8 +69,10 @@
     }
 
     function extractVariables(formula: string): string[] {
-        const matches = formula.match(/[A-Z]/g);
-        return matches ? [...new Set(matches)] : [];
+        return [...new Set(
+            (formula.match(/[A-Z0-9a-z]+/g) || [])
+                .filter((v:string) => v !== "T" && v !== "F")
+        )];
     }
 
     async function updateGraph() {
@@ -85,12 +128,31 @@
       stategraphs.push(svg);
     }
 
-    // Core logic functions kept exactly as provided
+    function updateUIState() {
+          if (!state || !state.execution_stack.length) return;
+
+          // Get the top frame (current execution context)
+          const frame = state.execution_stack.at(-1);
+          
+          // Update scope (Tabs)
+          currentScope = frame.type;
+
+          // Look up the mapping for the current step
+          const stepInfo = stepUIMap[currentScope]?.[frame.step];
+
+          if (stepInfo) {
+            currentBlock = stepInfo.block;
+            // Subtract 1 if your array is 0-indexed but your map uses 1-based line numbers
+            currentLine = stepInfo.line !== undefined ? stepInfo.line : null;
+          }
+        }
+
     function run() {
         if (!isValid) return;
         engine = new Engine(input, ordering);
         stategraphs = [];
         state = engine.getState();
+        updateUIState();
         updateGraph();
     }
 
@@ -98,6 +160,8 @@
         if (!engine) return;
         engine.step();
         state = engine.getState();
+        console.log(state);
+        updateUIState();
         updateGraph();
     }
 
@@ -105,6 +169,7 @@
         if (!engine) return;
         engine.stepBack();
         state = engine.getState();
+        updateUIState();
         updateGraph();
     }
 
@@ -138,26 +203,40 @@
     </header>
 
     <main>
-        <aside class="panel">
-            <section>
-                <h3>Variable Ordering</h3>
-                {#each ordering as variable, i}
-                    <div class="order-item">
-                        <span>{variable}</span>
-                        <div class="btn-group">
-                            <button on:click={() => moveUp(i)} disabled={i === 0}>↑</button>
-                            <button on:click={() => moveDown(i)} disabled={i === ordering.length - 1}>↓</button>
-                        </div>
+            <aside class="panel">
+                <section class="variable-section">
+                    <h3>Variable Ordering</h3>
+                    <div class="variable-list">
+                        {#each ordering as variable, i}
+                            <div class="order-item">
+                                <span>{variable}</span>
+                                <div class="btn-group">
+                                    <button on:click={() => moveUp(i)} disabled={i === 0}>↑</button>
+                                    <button on:click={() => moveDown(i)} disabled={i === ordering.length - 1}>↓</button>
+                                </div>
+                            </div>
+                        {/each}
                     </div>
-                {/each}
-            </section>
+                </section>
 
             <section class="code-flow">
-                <h3>Algorithm</h3>
+                <div class="section-header">
+                    <h3>Algorithm</h3>
+                    {#if state}
+                        <span class="block-badge">{currentBlock.replace('-', ' ')}</span>
+                    {/if}
+                </div>
+
+                <div class="tabs">
+                    <button class:active={currentScope === 'Obdd'} on:click={() => currentScope = 'Obdd'}>obdd(F)</button>
+                    <button class:active={currentScope === 'Integrate'} on:click={() => currentScope = 'Integrate'}>integrate(...)</button>
+                </div>
+                
                 <div class="code-box">
-                    {#each ['apply(f, g)', '  if (terminal) return ...', '  res = new Node()', '  return res'] as line, i}
-                        <div class="code-line" class:active={i === currentLine}>
+                    {#each functions[currentScope] as line, i}
+                        <div class="code-line" class:highlight={i === currentLine}>
                             <span class="arrow">{i === currentLine ? '▶' : ''}</span>
+                            <span class="line-num">{i + 1}</span>
                             <code>{line}</code>
                         </div>
                     {/each}
@@ -176,20 +255,26 @@
         </section>
 
         <aside class="panel">
-            <h3>Stack Frame</h3>
-            {#if state}
-                <div class="stack-card">
-                    <div class="stack-header">Function: build()</div>
-                    <div class="stack-body">
-                        {#each state.nodes.slice(-3) as node}
-                             <div class="stack-var">
-                                <strong>id_{node.id}:</strong> {node.var ?? 'T'}
-                             </div>
-                        {/each}
+            <h3>Stack Frames</h3>
+            {#if state && state.execution_stack}
+                {#each state.execution_stack as frame, i}
+                    <div class="stack-card" style="opacity: {1 - (i * 0.2)}">
+                        <div class="stack-header">
+                            <span class="func-name">{frame.type}</span>
+                            <span class="depth">Depth: {i}</span>
+                        </div>
+                            <div class="stack-body">
+                                {#each Object.entries(frame).filter(([key]) => key !== 'var_index' && key !== 'type') as [key, value]}
+                                    <div class="var-pill">
+                                        <span class="key">{key}:</span>
+                                        <span class="val">{value}</span>
+                                    </div>
+                                {/each}
+                            </div>
                     </div>
-                </div>
+                {/each}
             {:else}
-                <p class="dim">No active frames</p>
+                <p class="dim">Engine idle...</p>
             {/if}
         </aside>
     </main>
@@ -245,7 +330,50 @@
         border-right: 1px solid #181a1f;
         display: flex;
         flex-direction: column;
-        gap: 2rem;
+        /* Prevent the panel from growing past the screen height */
+        max-height: 100%; 
+        overflow: hidden; 
+    }
+
+    /* New container for the Variable section */
+    .variable-section {
+        display: flex;
+        flex-direction: column;
+        max-height: 40%; /* Limits size so Code Flow stays visible */
+        margin-bottom: 1.5rem;
+    }
+
+    .variable-list {
+        overflow-y: auto; /* Vertical scroll if list is too long */
+        padding-right: 4px; /* Space for scrollbar */
+    }
+
+    /* Custom scrollbar for a cleaner IDE look */
+    .variable-list::-webkit-scrollbar {
+        width: 4px;
+    }
+    .variable-list::-webkit-scrollbar-thumb {
+        background: #3e4451;
+        border-radius: 4px;
+    }
+
+    .order-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #21252b;
+        padding: 6px 10px;
+        border-radius: 4px;
+        margin-bottom: 6px;
+        min-height: 32px; /* Keeps size consistent */
+    }
+
+    /* Ensure the Code Flow takes up the remaining space */
+    .code-flow {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0; /* Important for flex-grow with overflow */
     }
 
     .panel:last-child { border-right: none; border-left: 1px solid #181a1f; }
@@ -262,11 +390,63 @@
         margin-bottom: 6px;
     }
 
-    /* Code & Arrow Styles */
-    .code-box { background: #1e2227; padding: 10px; border-radius: 4px; font-family: monospace; }
-    .code-line { display: flex; gap: 8px; font-size: 0.85rem; height: 1.2rem; align-items: center; }
-    .code-line.active { background: #2c313a; color: #61afef; }
-    .arrow { color: #e06c75; width: 12px; font-size: 0.7rem; }
+    /* Refined Code & Arrow Styles */
+    .code-box { 
+        background: #1e2227; 
+        padding: 10px 0; /* Vertical padding only, horizontal handled by lines */
+        border-radius: 4px; 
+        font-family: 'Fira Code', monospace; /* Fira Code is great for this if available */
+        overflow-x: auto; /* Allows horizontal scrolling for long lines */
+        display: flex;
+        flex-direction: column;
+    }
+
+    .code-line { 
+        display: flex; 
+        gap: 12px; 
+        font-size: 0.85rem; 
+        padding: 4px 12px; /* Consistent padding for all lines */
+        align-items: flex-start; /* Aligns arrow/number to top if line wraps */
+        min-width: max-content; /* CRITICAL: Ensures highlight extends to end of long lines */
+        transition: background 0.2s ease;
+    }
+
+    .code-line.highlight {
+        background: rgba(97, 175, 239, 0.15); /* Slightly subtler blue */
+        border-left: 3px solid #61afef; /* Visual "active" indicator */
+        padding-left: 9px; /* Offset for the 3px border */
+    }
+
+    .code-line code {
+        white-space: pre; /* Keeps indentation and prevents unwanted wrapping */
+        color: #abb2bf;
+    }
+
+    .arrow { 
+        color: #e06c75; 
+        width: 14px; 
+        min-width: 14px; /* Prevents arrow from shrinking */
+        font-size: 0.75rem;
+        display: inline-block;
+    }
+
+    .line-num {
+        color: #4b5263;
+        font-size: 0.75rem;
+        width: 20px;
+        min-width: 20px;
+        text-align: right;
+        user-select: none; /* Prevents selecting line numbers */
+    }
+
+    /* Scrollbar styling for a cleaner look */
+    .code-box::-webkit-scrollbar {
+        height: 6px;
+    }
+    .code-box::-webkit-scrollbar-thumb {
+        background: #3e4451;
+        border-radius: 10px;
+    }
 
     /* Visualisation Area */
     .visualisation {
@@ -283,7 +463,6 @@
     .stack-card { background: #21252b; border: 1px solid #3e4451; border-radius: 4px; overflow: hidden; }
     .stack-header { background: #3e4451; padding: 4px 8px; font-size: 0.75rem; color: #d19a66; }
     .stack-body { padding: 8px; font-size: 0.8rem; }
-    .stack-var { margin-bottom: 4px; border-bottom: 1px solid #2c313a; }
 
     /* General UI Elements */
     button {
@@ -301,4 +480,66 @@
     .btn-primary:hover { background: #528bff; }
     .step-label { font-family: monospace; color: #d19a66; }
     .dim { color: #5c6370; font-size: 0.8rem; }
+    .tabs {
+            display: flex;
+            gap: 2px;
+            margin-bottom: 8px;
+        }
+
+        .tabs button {
+            flex: 1;
+            background: #21252b;
+            border-radius: 4px 4px 0 0;
+            font-size: 0.7rem;
+            padding: 4px;
+            border-bottom: 2px solid transparent;
+        }
+
+      .tabs button.active {
+          background: #282c34;
+          border-bottom-color: #61afef;
+          color: #61afef;
+      }
+
+      .stack-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+      }
+
+      .depth {
+          font-size: 0.6rem;
+          background: #181a1f;
+          padding: 2px 5px;
+          border-radius: 10px;
+      }
+
+      .key { color: #c678dd; font-weight: bold; }
+      .val { color: #98c379; }
+.section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .section-header h3 { margin-bottom: 0; }
+
+    .block-badge {
+        font-size: 0.65rem;
+        background: #3e4451;
+        color: #61afef;
+        padding: 2px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border: 1px solid rgba(97, 175, 239, 0.3);
+    }
+
+    /* Improve the func-name color in the stack */
+    .func-name {
+        color: #61afef;
+        font-weight: bold;
+        font-size: 0.8rem;
+    }
 </style>
