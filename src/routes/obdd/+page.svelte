@@ -11,11 +11,14 @@
     let ordering: string[] = [];
     let viz = new Viz({ Module, render });
     let stategraphs: String[] = [];
-    let svg: String | null = null; 
+    let svg: String | null = null;
 
     let currentScope: 'Obdd' | 'Integrate' = 'Obdd';
-    let currentLine: number | null = 0; 
+    let currentLine: number | null = 0;
     let currentBlock: string = "preprocess";
+
+    // Mobile panel state: 'graph' | 'algorithm' | 'stack'
+    let mobilePanel: 'graph' | 'algorithm' | 'stack' = 'graph';
 
     const stepUIMap = {
       Obdd: {
@@ -28,7 +31,6 @@
         CallIntegrate: { block: "merge", line: 7 },
         Return: { block: "exit" }
       },
-
       Integrate: {
         CheckEqual: { block: "fast-path", line: 1 },
         LookupNode: { block: "memo", line: 2 },
@@ -36,7 +38,7 @@
         Return: { block: "exit" }
       }
     };
-    
+
     const functions = {
         Obdd: [
             "obdd(F):",
@@ -71,26 +73,25 @@
     function extractVariables(formula: string): string[] {
         return [...new Set(
             (formula.match(/[A-Z0-9a-z]+/g) || [])
-                .filter((v:string) => v !== "T" && v !== "F")
+                .filter((v: string) => v !== "T" && v !== "F")
         )];
     }
 
     async function updateGraph() {
-      if(!state) return;
-      
-      // Theming the Graphviz output for Dark Mode
+      if (!state) return;
+
       const nodeColor = "#abb2bf";
       const edgeColor = "#5c6370";
-      const highlight0 = "#e06c75"; // Soft Red
-      const highlight1 = "#98c379"; // Soft Green
+      const highlight0 = "#e06c75";
+      const highlight1 = "#98c379";
 
-      let nodes="";
-      let edges="";
-      let ranks="";
+      let nodes = "";
+      let edges = "";
+      let ranks = "";
 
       for (let i = 0; i < state.nodes.length; i++) {
         const n = state.nodes[i];
-        if(n.id == 0 || n.id == 1) continue;
+        if (n.id == 0 || n.id == 1) continue;
         nodes += `id${n.id} [label="${n.var}", color="${nodeColor}", fontcolor="${nodeColor}"];\n`;
         edges += `id${n.id} -> id${n.left} [style=dashed, label="0", color="${edgeColor}", fontcolor="${edgeColor}"];\n`;
         edges += `id${n.id} -> id${n.right} [style=solid, label="1", color="${nodeColor}", fontcolor="${nodeColor}"];\n`;
@@ -98,7 +99,7 @@
 
       let levels: String[][] = [];
       for (let n of state.nodes) {
-        if(n.id ==0 || n.id == 1) continue;
+        if (n.id == 0 || n.id == 1) continue;
         let index = ordering.indexOf(n.var);
         if (!levels[index]) levels[index] = [];
         levels[index].push(`id${n.id}`);
@@ -114,9 +115,7 @@
           rankdir=TB;
           node [shape=circle, fontname="Helvetica", penwidth=2];
           edge [fontname="Helvetica", fontsize=10];
-
           ${nodes}
-
           id0 [shape=box, label="0", color="${highlight0}", fontcolor="${highlight0}"];
           id1 [shape=box, label="1", color="${highlight1}", fontcolor="${highlight1}"];
           ${ranks}
@@ -128,23 +127,15 @@
     }
 
     function updateUIState() {
-          if (!state || !state.execution_stack.length) return;
-
-          // Get the top frame (current execution context)
-          const frame = state.execution_stack.at(-1);
-          
-          // Update scope (Tabs)
-          currentScope = frame.type;
-
-          // Look up the mapping for the current step
-          const stepInfo = stepUIMap[currentScope]?.[frame.step];
-
-          if (stepInfo) {
+        if (!state || !state.execution_stack.length) return;
+        const frame = state.execution_stack.at(-1);
+        currentScope = frame.type;
+        const stepInfo = stepUIMap[currentScope]?.[frame.step];
+        if (stepInfo) {
             currentBlock = stepInfo.block;
-            // Subtract 1 if your array is 0-indexed but your map uses 1-based line numbers
             currentLine = stepInfo.line !== undefined ? stepInfo.line : null;
-          }
         }
+    }
 
     function run() {
         if (!isValid) return;
@@ -153,13 +144,14 @@
         state = engine.getState();
         updateUIState();
         updateGraph();
+        // On mobile, jump to graph view after running
+        mobilePanel = 'graph';
     }
 
     function stepForward() {
         if (!engine) return;
         engine.step();
         state = engine.getState();
-        console.log(state);
         updateUIState();
         updateGraph();
     }
@@ -172,46 +164,28 @@
         updateGraph();
     }
 
-
     function goToStart() {
-            if (!engine) return;
-            
-            // Safety counter to prevent infinite loops if the engine is stuck
-            while (true) {
-                try {
-                    engine.stepBack();
-                } catch (e) {
-                    // We've hit the error/end state
-                    console.log("Reached end of execution:", e);
-                    break;
-                }
-            }
-            
-            state = engine.getState();
-            updateUIState();
-            updateGraph();
+        if (!engine) return;
+        while (true) {
+            try { engine.stepBack(); }
+            catch (e) { break; }
         }
+        state = engine.getState();
+        updateUIState();
+        updateGraph();
+    }
 
     function goToEnd() {
-            if (!engine) return;
-            
-            // Safety counter to prevent infinite loops if the engine is stuck
-
-            while (true) {
-                try {
-                    engine.step();
-                } catch (e) {
-                    // We've hit the error/end state
-                    console.log("Reached end of execution:", e);
-                    break;
-                }
-            }
-            
-            engine.stepBack();
-            state = engine.getState();
-            updateUIState();
-            updateGraph();
+        if (!engine) return;
+        while (true) {
+            try { engine.step(); }
+            catch (e) { break; }
         }
+        engine.stepBack();
+        state = engine.getState();
+        updateUIState();
+        updateGraph();
+    }
 
     function moveUp(index: number) {
         if (index === 0) return;
@@ -225,41 +199,64 @@
 </script>
 
 <div class="app">
+    <!-- ── HEADER ── -->
     <header>
-        <div class="logo">OBDD <small>Visualiser</small></div>
-        <div class="input-bar">
-            <input
-                class:invalid={!isValid && input.length > 0}
-                placeholder="Enter formula (e.g. A & B)"
-                on:input={handleInput}
-            />
-            <button class="btn-primary" on:click={run} disabled={!isValid}>Run</button>
+        <div class="header-top">
+            <div class="logo">OBDD <small>Visualiser</small></div>
+            <div class="input-bar">
+                <input
+                    class:invalid={!isValid && input.length > 0}
+                    placeholder="e.g. A & B"
+                    on:input={handleInput}
+                />
+                <button class="btn-primary" on:click={run} disabled={!isValid}>Run</button>
+            </div>
         </div>
         <div class="step-controls">
-            <button on:click={goToStart} disabled={!state}>Start</button>
-            <button on:click={stepBack} disabled={!state}>Back</button>
+            <button on:click={goToStart} disabled={!state} title="Go to start">⏮</button>
+            <button on:click={stepBack} disabled={!state} title="Step back">◀</button>
             <span class="step-label">Step {state?.step_number ?? 0}</span>
-            <button on:click={stepForward} disabled={!state}>Next</button>
-            <button on:click={goToEnd} disabled={!state}>End</button>
+            <button on:click={stepForward} disabled={!state} title="Step forward">▶</button>
+            <button on:click={goToEnd} disabled={!state} title="Go to end">⏭</button>
         </div>
     </header>
 
+    <!-- ── MOBILE NAV TABS ── -->
+    <nav class="mobile-nav">
+        <button class:active={mobilePanel === 'algorithm'} on:click={() => mobilePanel = 'algorithm'}>
+            <span class="nav-icon">⌥</span> Algorithm
+        </button>
+        <button class:active={mobilePanel === 'graph'} on:click={() => mobilePanel = 'graph'}>
+            <span class="nav-icon">◉</span> Graph
+        </button>
+        <button class:active={mobilePanel === 'stack'} on:click={() => mobilePanel = 'stack'}>
+            <span class="nav-icon">≡</span> Stack
+        </button>
+    </nav>
+
+    <!-- ── MAIN CONTENT ── -->
     <main>
-            <aside class="panel">
-                <section class="variable-section">
-                    <h3>Variable Ordering</h3>
+        <!-- LEFT PANEL: Variable Ordering + Algorithm -->
+        <aside class="panel panel-left" class:mobile-hidden={mobilePanel !== 'algorithm'}>
+
+            <section class="variable-section">
+                <h3>Variable Ordering</h3>
+                {#if ordering.length === 0}
+                    <p class="dim">Enter a formula to see variables.</p>
+                {:else}
                     <div class="variable-list">
                         {#each ordering as variable, i}
                             <div class="order-item">
-                                <span>{variable}</span>
+                                <span class="var-label">{variable}</span>
                                 <div class="btn-group">
-                                    <button on:click={() => moveUp(i)} disabled={i === 0}>↑</button>
-                                    <button on:click={() => moveDown(i)} disabled={i === ordering.length - 1}>↓</button>
+                                    <button on:click={() => moveUp(i)} disabled={i === 0} aria-label="Move up">↑</button>
+                                    <button on:click={() => moveDown(i)} disabled={i === ordering.length - 1} aria-label="Move down">↓</button>
                                 </div>
                             </div>
                         {/each}
                     </div>
-                </section>
+                {/if}
+            </section>
 
             <section class="code-flow">
                 <div class="section-header">
@@ -273,7 +270,7 @@
                     <button class:active={currentScope === 'Obdd'} on:click={() => currentScope = 'Obdd'}>obdd(F)</button>
                     <button class:active={currentScope === 'Integrate'} on:click={() => currentScope = 'Integrate'}>integrate(...)</button>
                 </div>
-                
+
                 <div class="code-box">
                     {#each functions[currentScope] as line, i}
                         <div class="code-line" class:highlight={i === currentLine}>
@@ -286,31 +283,36 @@
             </section>
         </aside>
 
-        <section class="visualisation">
+        <!-- CENTER: Graph Visualisation -->
+        <section class="visualisation" class:mobile-hidden={mobilePanel !== 'graph'}>
             {#if svg}
                 <div class="svg-container">
                     {@html svg}
                 </div>
             {:else}
-                <div class="empty-state">Initialize to view BDD</div>
+                <div class="empty-state">
+                    <div class="empty-icon">◎</div>
+                    <p>Enter a formula and press <strong>Run</strong> to visualise</p>
+                </div>
             {/if}
         </section>
 
-        <aside class="panel">
+        <!-- RIGHT PANEL: Stack Frames -->
+        <aside class="panel panel-right" class:mobile-hidden={mobilePanel !== 'stack'}>
             <h3>Stack Frames</h3>
             <div class="stack-list">
                 {#if state && state.execution_stack}
                     {#each state.execution_stack.toReversed() as frame, i}
                         {@const depth = state.execution_stack.length - 1 - i}
-                        <div class="stack-card" style="opacity: {1 - (i * 0.15)}">
+                        <div class="stack-card" style="opacity: {Math.max(0.4, 1 - i * 0.15)}">
                             <div class="stack-header">
                                 <span class="func-name">{frame.type}</span>
-                                <span class="depth">Depth: {depth}</span>
+                                <span class="depth">Depth {depth}</span>
                             </div>
                             <div class="stack-body">
                                 {#each Object.entries(frame).filter(([key]) => key !== 'var_index' && key !== 'type' && key !== 'step') as [key, value]}
                                     <div class="var-pill">
-                                        <span class="key">{key}:</span>
+                                        <span class="key">{key}</span>
                                         <span class="val">{value}</span>
                                     </div>
                                 {/each}
@@ -318,7 +320,7 @@
                         </div>
                     {/each}
                 {:else}
-                    <p class="dim">Engine idle...</p>
+                    <p class="dim">Engine idle…</p>
                 {/if}
             </div>
         </aside>
@@ -326,248 +328,198 @@
 </div>
 
 <style>
+    /* ── TOKENS ── */
+    :global(*) { box-sizing: border-box; }
     :global(body) {
         margin: 0;
         background-color: #1e2227;
         color: #abb2bf;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        /* Prevent iOS bounce on the body */
+        overscroll-behavior: none;
     }
 
+    /* ── APP SHELL ── */
     .app {
         display: flex;
         flex-direction: column;
-        height: 100vh;
+        height: 100dvh; /* dynamic viewport height – handles iOS toolbar */
+        overflow: hidden;
     }
 
+    /* ── HEADER ── */
     header {
+        flex-shrink: 0;
+        background: #21252b;
+        border-bottom: 1px solid #181a1f;
+        padding: 0.6rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .header-top {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        padding: 0.75rem 1.5rem;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .logo {
+        font-weight: bold;
+        color: #61afef;
+        font-size: 1.1rem;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .logo small { color: #5c6370; font-weight: normal; }
+
+    .input-bar {
+        display: flex;
+        gap: 8px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    input {
+        flex: 1;
+        min-width: 0;
+        background: #282c34;
+        border: 1px solid #3e4451;
+        color: #abb2bf;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        /* Prevent iOS zoom on focus (needs font-size >= 16px in some cases) */
+        font-size: max(16px, 0.9rem);
+    }
+    input.invalid { border-color: #e06c75; }
+    input:focus { outline: none; border-color: #61afef; }
+
+    .step-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        justify-content: center;
+    }
+
+    .step-controls button {
+        /* Larger tap targets on mobile */
+        min-width: 40px;
+        min-height: 36px;
+        font-size: 1rem;
+    }
+
+    .step-label {
+        font-family: monospace;
+        color: #d19a66;
+        font-size: 0.85rem;
+        padding: 0 4px;
+        white-space: nowrap;
+    }
+
+    /* ── MOBILE NAV ── */
+    .mobile-nav {
+        display: none; /* shown via media query */
+        flex-shrink: 0;
         background: #21252b;
         border-bottom: 1px solid #181a1f;
     }
 
-    .logo { font-weight: bold; color: #61afef; font-size: 1.2rem; }
-    .logo small { color: #5c6370; font-weight: normal; }
-
-    .input-bar { display: flex; gap: 10px; }
-    input {
-        background: #282c34;
-        border: 1px solid #181a1f;
-        color: #abb2bf;
-        padding: 6px 12px;
-        border-radius: 4px;
-        width: 250px;
+    .mobile-nav button {
+        flex: 1;
+        padding: 10px 4px;
+        border-radius: 0;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: #5c6370;
+        font-size: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        cursor: pointer;
+        min-height: 48px; /* WCAG touch target */
     }
-    input.invalid { border-color: #e06c75; }
+    .mobile-nav button.active {
+        color: #61afef;
+        border-bottom-color: #61afef;
+    }
+    .nav-icon { font-size: 1rem; }
 
+    /* ── MAIN GRID ── */
     main {
         display: grid;
         grid-template-columns: 280px 1fr 250px;
-        flex-grow: 1;
+        flex: 1;
         overflow: hidden;
     }
 
+    /* ── PANELS ── */
     .panel {
         background: #282c34;
         padding: 1rem;
-        border-right: 1px solid #181a1f;
         display: flex;
         flex-direction: column;
-        /* Prevent the panel from growing past the screen height */
-        max-height: 100%; 
-        overflow: hidden; 
+        overflow: hidden;
     }
 
-    /* New container for the Variable section */
+    .panel-left  { border-right: 1px solid #181a1f; }
+    .panel-right { border-left:  1px solid #181a1f; }
+
+    /* Mobile-hidden: controlled by mobile nav */
+    /* (hidden on mobile when not the active tab, but always shown on desktop) */
+
+    /* ── VARIABLE SECTION ── */
     .variable-section {
         display: flex;
         flex-direction: column;
-        max-height: 40%; /* Limits size so Code Flow stays visible */
-        margin-bottom: 1.5rem;
+        max-height: 38%;
+        margin-bottom: 1.2rem;
     }
 
     .variable-list {
-        overflow-y: auto; /* Vertical scroll if list is too long */
-        padding-right: 4px; /* Space for scrollbar */
+        overflow-y: auto;
+        padding-right: 4px;
     }
-
-    /* Custom scrollbar for a cleaner IDE look */
-    .variable-list::-webkit-scrollbar {
-        width: 4px;
-    }
-    .variable-list::-webkit-scrollbar-thumb {
-        background: #3e4451;
-        border-radius: 4px;
-    }
+    .variable-list::-webkit-scrollbar { width: 4px; }
+    .variable-list::-webkit-scrollbar-thumb { background: #3e4451; border-radius: 4px; }
 
     .order-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
         background: #21252b;
-        padding: 6px 10px;
-        border-radius: 4px;
+        padding: 8px 10px;
+        border-radius: 6px;
         margin-bottom: 6px;
-        min-height: 32px; /* Keeps size consistent */
+        gap: 8px;
     }
 
-    /* Ensure the Code Flow takes up the remaining space */
+    .var-label { font-family: monospace; color: #e5c07b; }
+
+    .btn-group { display: flex; gap: 4px; }
+    .btn-group button {
+        min-width: 32px;
+        min-height: 32px;
+        padding: 4px 8px;
+    }
+
+    /* ── CODE FLOW ── */
     .code-flow {
-        flex-grow: 1;
+        flex: 1;
         display: flex;
         flex-direction: column;
-        min-height: 0; /* Important for flex-grow with overflow */
+        min-height: 0;
     }
 
-    .panel:last-child { border-right: none; border-left: 1px solid #181a1f; }
-
-    h3 { font-size: 0.8rem; text-transform: uppercase; color: #5c6370; margin-bottom: 1rem; letter-spacing: 1px; }
-
-    .order-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: #21252b;
-        padding: 6px 10px;
-        border-radius: 4px;
-        margin-bottom: 6px;
-    }
-
-    /* Refined Code & Arrow Styles */
-    .code-box { 
-        background: #1e2227; 
-        padding: 10px 0; /* Vertical padding only, horizontal handled by lines */
-        border-radius: 4px; 
-        font-family: 'Fira Code', monospace; /* Fira Code is great for this if available */
-        overflow-x: auto; /* Allows horizontal scrolling for long lines */
-        display: flex;
-        flex-direction: column;
-    }
-
-    .code-line { 
-        display: flex; 
-        gap: 12px; 
-        font-size: 0.85rem; 
-        padding: 4px 12px; /* Consistent padding for all lines */
-        align-items: flex-start; /* Aligns arrow/number to top if line wraps */
-        min-width: max-content; /* CRITICAL: Ensures highlight extends to end of long lines */
-        transition: background 0.2s ease;
-    }
-
-    .code-line.highlight {
-        background: rgba(97, 175, 239, 0.15); /* Slightly subtler blue */
-        border-left: 3px solid #61afef; /* Visual "active" indicator */
-        padding-left: 9px; /* Offset for the 3px border */
-    }
-
-    .code-line code {
-        white-space: pre; /* Keeps indentation and prevents unwanted wrapping */
-        color: #abb2bf;
-    }
-
-    .arrow { 
-        color: #e06c75; 
-        width: 14px; 
-        min-width: 14px; /* Prevents arrow from shrinking */
-        font-size: 0.75rem;
-        display: inline-block;
-    }
-
-    .line-num {
-        color: #4b5263;
-        font-size: 0.75rem;
-        width: 20px;
-        min-width: 20px;
-        text-align: right;
-        user-select: none; /* Prevents selecting line numbers */
-    }
-
-    /* Scrollbar styling for a cleaner look */
-    .code-box::-webkit-scrollbar {
-        height: 6px;
-    }
-    .code-box::-webkit-scrollbar-thumb {
-        background: #3e4451;
-        border-radius: 10px;
-    }
-
-    /* Visualisation Area */
-    .visualisation {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        overflow: auto;
-        padding: 20px;
-    }
-    .svg-container { max-width: 100%; }
-    .empty-state { color: #5c6370; font-style: italic; }
-
-    /* Stack Frame Styles */
-    .stack-card { background: #21252b; border: 1px solid #3e4451; border-radius: 4px; overflow: hidden; }
-    .stack-header { background: #3e4451; padding: 4px 8px; font-size: 0.75rem; color: #d19a66; }
-    .stack-body { padding: 8px; font-size: 0.8rem; }
-
-    /* General UI Elements */
-    button {
-        background: #3e4451;
-        color: #abb2bf;
-        border: none;
-        padding: 4px 10px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.8rem;
-    }
-    button:hover:not(:disabled) { background: #4b5263; color: white; }
-    button:disabled { opacity: 0.3; cursor: not-allowed; }
-    .btn-primary { background: #61afef; color: #21252b; font-weight: bold; }
-    .btn-primary:hover { background: #528bff; }
-    .step-label { font-family: monospace; color: #d19a66; }
-    .dim { color: #5c6370; font-size: 0.8rem; }
-    .tabs {
-            display: flex;
-            gap: 2px;
-            margin-bottom: 8px;
-        }
-
-        .tabs button {
-            flex: 1;
-            background: #21252b;
-            border-radius: 4px 4px 0 0;
-            font-size: 0.7rem;
-            padding: 4px;
-            border-bottom: 2px solid transparent;
-        }
-
-      .tabs button.active {
-          background: #282c34;
-          border-bottom-color: #61afef;
-          color: #61afef;
-      }
-
-      .stack-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-      }
-
-      .depth {
-          font-size: 0.6rem;
-          background: #181a1f;
-          padding: 2px 5px;
-          border-radius: 10px;
-      }
-
-      .key { color: #c678dd; font-weight: bold; }
-      .val { color: #98c379; }
-.section-header {
+    .section-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 0.5rem;
     }
-
     .section-header h3 { margin-bottom: 0; }
 
     .block-badge {
@@ -579,49 +531,246 @@
         text-transform: uppercase;
         letter-spacing: 0.5px;
         border: 1px solid rgba(97, 175, 239, 0.3);
+        white-space: nowrap;
     }
 
-    /* Improve the func-name color in the stack */
-    .func-name {
+    .tabs {
+        display: flex;
+        gap: 2px;
+        margin-bottom: 8px;
+    }
+    .tabs button {
+        flex: 1;
+        background: #21252b;
+        border-radius: 4px 4px 0 0;
+        font-size: 0.7rem;
+        padding: 6px 4px;
+        border-bottom: 2px solid transparent;
+        min-height: 36px;
+    }
+    .tabs button.active {
+        background: #282c34;
+        border-bottom-color: #61afef;
         color: #61afef;
-        font-weight: bold;
-        font-size: 0.8rem;
     }
 
-/* Scrollable container for stack frames */
+    .code-box {
+        background: #1e2227;
+        padding: 10px 0;
+        border-radius: 4px;
+        font-family: 'Fira Code', 'Consolas', monospace;
+        overflow-x: auto;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+    }
+    .code-box::-webkit-scrollbar { height: 5px; width: 4px; }
+    .code-box::-webkit-scrollbar-thumb { background: #3e4451; border-radius: 10px; }
+
+    .code-line {
+        display: flex;
+        gap: 10px;
+        font-size: 0.82rem;
+        padding: 4px 12px;
+        align-items: flex-start;
+        min-width: max-content;
+        transition: background 0.15s ease;
+    }
+    .code-line.highlight {
+        background: rgba(97, 175, 239, 0.15);
+        border-left: 3px solid #61afef;
+        padding-left: 9px;
+    }
+    .code-line code { white-space: pre; color: #abb2bf; }
+
+    .arrow {
+        color: #e06c75;
+        width: 14px;
+        min-width: 14px;
+        font-size: 0.72rem;
+        display: inline-block;
+    }
+    .line-num {
+        color: #4b5263;
+        font-size: 0.72rem;
+        width: 18px;
+        min-width: 18px;
+        text-align: right;
+        user-select: none;
+    }
+
+    /* ── VISUALISATION ── */
+    .visualisation {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: auto;
+        padding: 20px;
+        background: #1e2227;
+    }
+
+    .svg-container {
+        max-width: 100%;
+        max-height: 100%;
+    }
+    /* Make the SVG itself scale correctly */
+    .svg-container :global(svg) {
+        max-width: 100%;
+        height: auto;
+    }
+
+    .empty-state {
+        color: #5c6370;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+    }
+    .empty-icon { font-size: 3rem; opacity: 0.4; }
+    .empty-state p { font-size: 0.9rem; margin: 0; }
+    .empty-state strong { color: #61afef; }
+
+    /* ── STACK FRAMES ── */
     .stack-list {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 8px;
         overflow-y: auto;
-        flex-grow: 1; /* Fills the rest of the panel */
-        padding-right: 4px; /* Space for scrollbar */
+        flex: 1;
+        padding-right: 4px;
+    }
+    .stack-list::-webkit-scrollbar { width: 4px; }
+    .stack-list::-webkit-scrollbar-thumb { background: #3e4451; border-radius: 4px; }
+
+    .stack-card {
+        background: #21252b;
+        border: 1px solid #3e4451;
+        border-radius: 6px;
+        overflow: hidden;
+        flex-shrink: 0;
+        transition: opacity 0.2s ease;
     }
 
-    /* Custom scrollbar for stack list */
-    .stack-list::-webkit-scrollbar {
-        width: 4px;
-    }
-    .stack-list::-webkit-scrollbar-thumb {
+    .stack-header {
         background: #3e4451;
-        border-radius: 4px;
+        padding: 5px 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 
-    .stack-card { 
-        background: #21252b; 
-        border: 1px solid #3e4451; 
-        border-radius: 4px; 
-        overflow: hidden; 
-        flex-shrink: 0; /* Prevents cards from squishing */
+    .func-name { color: #61afef; font-weight: bold; font-size: 0.8rem; }
+
+    .depth {
+        font-size: 0.6rem;
+        background: #181a1f;
+        color: #abb2bf;
+        padding: 2px 6px;
+        border-radius: 10px;
     }
 
-    /* Make the variable pills look a bit tighter for scrolling */
+    .stack-body { padding: 8px 10px; }
+
     .var-pill {
         display: flex;
         justify-content: space-between;
         font-size: 0.75rem;
-        padding: 2px 0;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
+        padding: 3px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
     .var-pill:last-child { border-bottom: none; }
+    .key { color: #c678dd; font-weight: bold; }
+    .val { color: #98c379; }
+
+    /* ── SHARED ── */
+    h3 {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: #5c6370;
+        margin: 0 0 0.75rem;
+        letter-spacing: 1px;
+    }
+
+    button {
+        background: #3e4451;
+        color: #abb2bf;
+        border: none;
+        padding: 5px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.82rem;
+        transition: background 0.15s ease, color 0.15s ease;
+        /* Tap highlight on mobile */
+        -webkit-tap-highlight-color: transparent;
+    }
+    button:hover:not(:disabled) { background: #4b5263; color: #fff; }
+    button:active:not(:disabled) { background: #61afef22; }
+    button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .btn-primary { background: #61afef; color: #21252b; font-weight: bold; padding: 8px 16px; }
+    .btn-primary:hover { background: #528bff; color: #fff; }
+    .btn-primary:disabled { background: #3e4451; color: #5c6370; }
+
+    .dim { color: #5c6370; font-size: 0.8rem; margin: 0; }
+
+    /* ─────────────────────────────────────────────
+       RESPONSIVE – MOBILE BREAKPOINT (≤ 768px)
+    ───────────────────────────────────────────── */
+    @media (max-width: 768px) {
+        /* Show mobile nav */
+        .mobile-nav { display: flex; }
+
+        /* Collapse 3-column grid to single column */
+        main {
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr;
+            overflow: hidden;
+        }
+
+        /* All panels take full area; visibility toggled by .mobile-hidden */
+        .panel, .visualisation {
+            grid-column: 1;
+            grid-row: 1;
+        }
+
+        .panel-left, .panel-right {
+            border: none;
+        }
+
+        /* Hide panels that aren't selected on mobile */
+        .mobile-hidden {
+            display: none !important;
+        }
+
+        /* Variable section can take more height on mobile */
+        .variable-section {
+            max-height: 45%;
+        }
+
+        /* Full-width input */
+        .input-bar { flex: 1 1 100%; }
+
+        /* Compact header */
+        header { padding: 0.5rem 0.75rem; }
+
+        .logo { font-size: 1rem; }
+
+        /* Step controls fill width evenly */
+        .step-controls {
+            width: 100%;
+            justify-content: space-between;
+        }
+        .step-controls button {
+            flex: 1;
+            max-width: 52px;
+        }
+    }
+
+    /* ── SMALL PHONE (≤ 380px) ── */
+    @media (max-width: 380px) {
+        .code-line { font-size: 0.75rem; }
+        input { font-size: 16px; } /* prevent iOS zoom */
+    }
 </style>
