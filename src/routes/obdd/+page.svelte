@@ -331,12 +331,11 @@
     /* ── TOKENS ── */
     :global(*) { box-sizing: border-box; }
     :global(body) {
-        margin: 0;
-        background-color: #1e2227;
-        color: #abb2bf;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        /* Prevent iOS bounce on the body */
-        overscroll-behavior: none;
+      margin: 0;
+      background: #000;
+      color: #e5e7eb;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+      overscroll-behavior: none;
     }
 
     /* ── APP SHELL ── */
@@ -350,8 +349,8 @@
     /* ── HEADER ── */
     header {
         flex-shrink: 0;
-        background: #21252b;
-        border-bottom: 1px solid #181a1f;
+        background: #0a0a0a;
+        border-bottom: 1px solid #27272a;
         padding: 0.6rem 1rem;
         display: flex;
         flex-direction: column;
@@ -422,8 +421,8 @@
     .mobile-nav {
         display: none; /* shown via media query */
         flex-shrink: 0;
-        background: #21252b;
-        border-bottom: 1px solid #181a1f;
+        background: #0a0a0a;
+        border-bottom: 1px solid #27272a;
     }
 
     .mobile-nav button {
@@ -443,8 +442,8 @@
         min-height: 48px; /* WCAG touch target */
     }
     .mobile-nav button.active {
-        color: #61afef;
-        border-bottom-color: #61afef;
+        color: #60a5fa;
+        border-bottom-color: #3b82f6;
     }
     .nav-icon { font-size: 1rem; }
 
@@ -458,15 +457,15 @@
 
     /* ── PANELS ── */
     .panel {
-        background: #282c34;
+        background: #0a0a0a;
         padding: 1rem;
         display: flex;
         flex-direction: column;
         overflow: hidden;
     }
 
-    .panel-left  { border-right: 1px solid #181a1f; }
-    .panel-right { border-left:  1px solid #181a1f; }
+    .panel-left  { border-right: 1px solid #27272a; }
+    .panel-right { border-left:  1px solid #27272a; }
 
     /* Mobile-hidden: controlled by mobile nav */
     /* (hidden on mobile when not the active tab, but always shown on desktop) */
@@ -497,7 +496,7 @@
         gap: 8px;
     }
 
-    .var-label { font-family: monospace; color: #e5c07b; }
+    .var-label { font-family: monospace; color: #fbbf24; }
 
     .btn-group { display: flex; gap: 4px; }
     .btn-group button {
@@ -555,7 +554,7 @@
     }
 
     .code-box {
-        background: #1e2227;
+        background: #0a0a0a;
         padding: 10px 0;
         border-radius: 4px;
         font-family: 'Fira Code', 'Consolas', monospace;
@@ -578,8 +577,8 @@
         transition: background 0.15s ease;
     }
     .code-line.highlight {
-        background: rgba(97, 175, 239, 0.15);
-        border-left: 3px solid #61afef;
+        background: rgba(59, 130, 246, 0.08);;
+        border-left: 2px solid #3b82f6;
         padding-left: 9px;
     }
     .code-line code { white-space: pre; color: #abb2bf; }
@@ -607,7 +606,7 @@
         align-items: center;
         overflow: auto;
         padding: 20px;
-        background: #1e2227;
+        background: #000;
     }
 
     .svg-container {
@@ -645,8 +644,8 @@
     .stack-list::-webkit-scrollbar-thumb { background: #3e4451; border-radius: 4px; }
 
     .stack-card {
-        background: #21252b;
-        border: 1px solid #3e4451;
+        background: #0a0a0a;
+        border: 1px solid #27272a;
         border-radius: 6px;
         overflow: hidden;
         flex-shrink: 0;
@@ -654,7 +653,7 @@
     }
 
     .stack-header {
-        background: #3e4451;
+        background: #111;
         padding: 5px 10px;
         display: flex;
         justify-content: space-between;
@@ -681,8 +680,8 @@
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
     .var-pill:last-child { border-bottom: none; }
-    .key { color: #c678dd; font-weight: bold; }
-    .val { color: #98c379; }
+    .key { color: #a78bfa; font-weight: bold; }
+    .val { color: #4ade80; }
 
     /* ── SHARED ── */
     h3 {
@@ -705,12 +704,21 @@
         /* Tap highlight on mobile */
         -webkit-tap-highlight-color: transparent;
     }
-    button:hover:not(:disabled) { background: #4b5263; color: #fff; }
+    button:hover:not(:disabled) {
+      background: #111;
+      border-color: #3b82f6;
+      color: #60a5fa;
+    }
     button:active:not(:disabled) { background: #61afef22; }
     button:disabled { opacity: 0.3; cursor: not-allowed; }
 
-    .btn-primary { background: #61afef; color: #21252b; font-weight: bold; padding: 8px 16px; }
-    .btn-primary:hover { background: #528bff; color: #fff; }
+    .btn-primary {
+      background: #3b82f6;
+      color: black;
+    }
+    .btn-primary:hover {
+      background: #60a5fa;
+    }
     .btn-primary:disabled { background: #3e4451; color: #5c6370; }
 
     .dim { color: #5c6370; font-size: 0.8rem; margin: 0; }
@@ -736,7 +744,7 @@
         }
 
         .panel-left, .panel-right {
-            border: none;
+          border-right: 1px solid #27272a;
         }
 
         /* Hide panels that aren't selected on mobile */
