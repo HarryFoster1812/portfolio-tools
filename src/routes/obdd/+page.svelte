@@ -20,6 +20,18 @@
     // Mobile panel state: 'graph' | 'algorithm' | 'stack'
     let mobilePanel: 'graph' | 'algorithm' | 'stack' = 'graph';
 
+    let showHelp = false;
+
+    const syntaxRules = [
+        { symbol: "T, F", desc: "Constants (True, False)" },
+        { symbol: "!", desc: "NOT (Negation)" },
+        { symbol: "&", desc: "AND (Conjunction)" },
+        { symbol: "|", desc: "OR (Disjunction)" },
+        { symbol: "->", desc: "Implication" },
+        { symbol: "<->", desc: "Bi-conditional" },
+        { symbol: "( )", desc: "Parentheses for precedence" }
+    ];
+
     const stepUIMap = {
       Obdd: {
         Simplify: { block: "preprocess", line: 1 },
@@ -203,6 +215,7 @@
     <header>
         <div class="header-top">
             <div class="logo">OBDD <small>Visualiser</small></div>
+            <button class="help-trigger" on:click={() => showHelp = true} title="Syntax Help">?</button>
             <div class="input-bar">
                 <input
                     class:invalid={!isValid && input.length > 0}
@@ -324,6 +337,35 @@
                 {/if}
             </div>
         </aside>
+
+    {#if showHelp}
+        <div class="modal-backdrop" on:click|self={() => showHelp = false}>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Logic Syntax Help</h3>
+                    <button class="close-btn" on:click={() => showHelp = false}>&times;</button>
+                </div>
+                
+                <div class="modal-body">
+                    <p>Use variables (A, B, p1...) and the following operators:</p>
+                    
+                    <div class="syntax-grid">
+                        {#each syntaxRules as rule}
+                            <div class="syntax-row">
+                                <code class="syntax-symbol">{rule.symbol}</code>
+                                <span class="syntax-desc">{rule.desc}</span>
+                            </div>
+                        {/each}
+                    </div>
+
+                    <div class="example-box">
+                        <small>Example:</small>
+                        <code>(A & B) -> !C</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {/if}
     </main>
 </div>
 
@@ -723,6 +765,106 @@
 
     .dim { color: #5c6370; font-size: 0.8rem; margin: 0; }
 
+/* ── HELP MODAL ── */
+    .help-trigger {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #282c34;
+        color: #61afef;
+        border: 1px solid #3e4451;
+        font-weight: bold;
+    }
+
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 20px;
+    }
+
+    .modal-content {
+        background: #111;
+        border: 1px solid #3e4451;
+        border-radius: 12px;
+        width: 100%;
+        max-width: 400px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        animation: scaleIn 0.2s ease-out;
+    }
+
+    @keyframes scaleIn {
+        from { transform: scale(0.95); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-header {
+        padding: 1rem;
+        border-bottom: 1px solid #27272a;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header h3 { margin: 0; color: #61afef; }
+
+    .close-btn {
+        background: transparent;
+        font-size: 1.5rem;
+        padding: 0;
+        color: #5c6370;
+    }
+
+    .modal-body { padding: 1.25rem; }
+    .modal-body p { font-size: 0.9rem; color: #abb2bf; margin-top: 0; }
+
+    .syntax-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 1.5rem;
+    }
+
+    .syntax-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 6px;
+        background: #1a1d23;
+        border-radius: 6px;
+    }
+
+    .syntax-symbol {
+        color: #fbbf24;
+        font-weight: bold;
+        min-width: 60px;
+        font-size: 1rem;
+    }
+
+    .syntax-desc { font-size: 0.85rem; color: #e5e7eb; }
+
+    .example-box {
+        background: #000;
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px dashed #3e4451;
+        text-align: center;
+    }
+    
+    .example-box small { display: block; color: #5c6370; margin-bottom: 4px; }
+    .example-box code { color: #98c379; font-size: 1rem; }
     /* ─────────────────────────────────────────────
        RESPONSIVE – MOBILE BREAKPOINT (≤ 768px)
     ───────────────────────────────────────────── */
