@@ -22,8 +22,8 @@ for crate in modules/*; do
     wasm-pack build \
       --target web \
       --release \
-      --out-dir src/lib/wasm/$name/pkg \
-      --out-name $name \
+      --out-dir "$PWD/src/lib/wasm/$name/pkg" \
+      --out-name "$name" \
       "$crate"
   fi
 done
