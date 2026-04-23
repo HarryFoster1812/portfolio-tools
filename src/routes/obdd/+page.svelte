@@ -77,7 +77,6 @@
 
     async function updateGraph() {
       if(!state) return;
-      if(stategraphs.length < state.step_number){ svg = stategraphs[state.step_number];return;}
       
       // Theming the Graphviz output for Dark Mode
       const nodeColor = "#abb2bf";
@@ -173,6 +172,47 @@
         updateGraph();
     }
 
+
+    function goToStart() {
+            if (!engine) return;
+            
+            // Safety counter to prevent infinite loops if the engine is stuck
+            while (true) {
+                try {
+                    engine.stepBack();
+                } catch (e) {
+                    // We've hit the error/end state
+                    console.log("Reached end of execution:", e);
+                    break;
+                }
+            }
+            
+            state = engine.getState();
+            updateUIState();
+            updateGraph();
+        }
+
+    function goToEnd() {
+            if (!engine) return;
+            
+            // Safety counter to prevent infinite loops if the engine is stuck
+
+            while (true) {
+                try {
+                    engine.step();
+                } catch (e) {
+                    // We've hit the error/end state
+                    console.log("Reached end of execution:", e);
+                    break;
+                }
+            }
+            
+            engine.stepBack();
+            state = engine.getState();
+            updateUIState();
+            updateGraph();
+        }
+
     function moveUp(index: number) {
         if (index === 0) return;
         [ordering[index - 1], ordering[index]] = [ordering[index], ordering[index - 1]];
@@ -196,9 +236,11 @@
             <button class="btn-primary" on:click={run} disabled={!isValid}>Run</button>
         </div>
         <div class="step-controls">
+            <button on:click={goToStart} disabled={!state}>Start</button>
             <button on:click={stepBack} disabled={!state}>Back</button>
             <span class="step-label">Step {state?.step_number ?? 0}</span>
             <button on:click={stepForward} disabled={!state}>Next</button>
+            <button on:click={goToEnd} disabled={!state}>End</button>
         </div>
     </header>
 
@@ -256,26 +298,29 @@
 
         <aside class="panel">
             <h3>Stack Frames</h3>
-            {#if state && state.execution_stack}
-                {#each state.execution_stack as frame, i}
-                    <div class="stack-card" style="opacity: {1 - (i * 0.2)}">
-                        <div class="stack-header">
-                            <span class="func-name">{frame.type}</span>
-                            <span class="depth">Depth: {i}</span>
-                        </div>
+            <div class="stack-list">
+                {#if state && state.execution_stack}
+                    {#each state.execution_stack.toReversed() as frame, i}
+                        {@const depth = state.execution_stack.length - 1 - i}
+                        <div class="stack-card" style="opacity: {1 - (i * 0.15)}">
+                            <div class="stack-header">
+                                <span class="func-name">{frame.type}</span>
+                                <span class="depth">Depth: {depth}</span>
+                            </div>
                             <div class="stack-body">
-                                {#each Object.entries(frame).filter(([key]) => key !== 'var_index' && key !== 'type') as [key, value]}
+                                {#each Object.entries(frame).filter(([key]) => key !== 'var_index' && key !== 'type' && key !== 'step') as [key, value]}
                                     <div class="var-pill">
                                         <span class="key">{key}:</span>
                                         <span class="val">{value}</span>
                                     </div>
                                 {/each}
                             </div>
-                    </div>
-                {/each}
-            {:else}
-                <p class="dim">Engine idle...</p>
-            {/if}
+                        </div>
+                    {/each}
+                {:else}
+                    <p class="dim">Engine idle...</p>
+                {/if}
+            </div>
         </aside>
     </main>
 </div>
@@ -542,4 +587,41 @@
         font-weight: bold;
         font-size: 0.8rem;
     }
+
+/* Scrollable container for stack frames */
+    .stack-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        overflow-y: auto;
+        flex-grow: 1; /* Fills the rest of the panel */
+        padding-right: 4px; /* Space for scrollbar */
+    }
+
+    /* Custom scrollbar for stack list */
+    .stack-list::-webkit-scrollbar {
+        width: 4px;
+    }
+    .stack-list::-webkit-scrollbar-thumb {
+        background: #3e4451;
+        border-radius: 4px;
+    }
+
+    .stack-card { 
+        background: #21252b; 
+        border: 1px solid #3e4451; 
+        border-radius: 4px; 
+        overflow: hidden; 
+        flex-shrink: 0; /* Prevents cards from squishing */
+    }
+
+    /* Make the variable pills look a bit tighter for scrolling */
+    .var-pill {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.75rem;
+        padding: 2px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .var-pill:last-child { border-bottom: none; }
 </style>
