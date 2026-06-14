@@ -47,6 +47,8 @@
 		"vitest-browser-svelte": "^2.0.2"
 	},
 	"dependencies": {
+		"@yowasp/yosys": "^0.65.176-dev.1145",
+		"pixi.js": "^8.19.0",
 		"vite-plugin-wasm": "^3.6.0",
 		"viz.js": "^2.1.2"
 	}

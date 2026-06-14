@@ -7,14 +7,29 @@ import path from 'path';
 import wasm from 'vite-plugin-wasm';
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit(), devtoolsJson(), wasm()],
-  server: {
-    fs: {
-      allow: [
-        path.resolve(__dirname, 'modules') 
-      ]
-    }
-  },
+	optimizeDeps: {
+		include: ['eventemitter3', '@xmldom/xmldom'],
+		exclude: ['@yowasp/yosys', 'pixi.js']
+	},
+
+	plugins: [
+		tailwindcss(), 
+		sveltekit(), 
+		devtoolsJson(), 
+		wasm() 
+	],
+
+	server: {
+		fs: {
+			allow: [
+				path.resolve(__dirname, 'modules') 
+			]
+		},
+		watch: {
+			// 3. Keep the file watcher out of the cache folder
+			ignored: ['**/node_modules/.vite/**']
+		}
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
@@ -31,7 +46,6 @@ export default defineConfig({
 					exclude: ['src/lib/server/**']
 				}
 			},
-
 			{
 				extends: './vite.config.ts',
 				test: {
