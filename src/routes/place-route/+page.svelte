@@ -9,6 +9,8 @@
     channelCapacity: 4
   };
 
+	var randomSeed=0;
+
   // 2. Track minimum boundaries determined dynamically by the compiled circuit
   let minRequiredClbs = 1;
   let minRequiredIoPads = 4;
@@ -163,13 +165,13 @@ endmodule`;
       <h2>Verilog HDL Source Editor</h2>
       <div class="action-row">
         <button class="settings-trigger-btn" on:click={() => showSettingsModal = true}>
-          ⚙️ Fabric Settings
+          ⚙️ Settings
         </button>
         <button class="compile-btn" on:click={handleCodeCompilation} disabled={isCompiling}>
           {#if isCompiling}
             <span class="spinner"></span> Synthesizing Wasm...
           {:else}
-            ⚡ Run Compile Engine
+            ⚡ Compile
           {/if}
         </button>
       </div>
@@ -289,6 +291,19 @@ endmodule`;
             bind:value={dimensions.channelCapacity} 
           />
           <span class="input-tip">Increasing track allocation increases physical spacing parameters inside routing channels.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="randomseed">
+            Random Engine Seed Value: <strong>#{randomSeed}</strong>
+          </label>
+          <input 
+            type="number" 
+            id="randomseed"
+            placeholder="0"
+            bind:value={randomSeed} 
+          />
+          <span class="input-tip">Deterministic routing seed for reproducible runs. Set to 0 for pseudo-random state initialization.</span>
         </div>
 
         {#if hasCompiledOnce && (dimensions.clbWidth * dimensions.clbHeight < minRequiredClbs)}
